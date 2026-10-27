@@ -73,6 +73,13 @@ function sameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return true; // 同站请求（部分客户端不带 Origin）
 
+  // 浏览器自报的请求上下文，跨站页面无法伪造：
+  // - same-origin：请求确实由本站页面发起
+  // - none：用户直接在地址栏输入 / 书签打开
+  // 这两个值不受反向代理改写 Host 影响，是反代场景下最可靠的依据。
+  const site = String(req.headers['sec-fetch-site'] || '').toLowerCase();
+  if (site === 'same-origin' || site === 'none') return true;
+
   let parsed;
   try {
     parsed = new URL(origin);
@@ -105,7 +112,18 @@ function sameOrigin(req) {
     if (h.split(':')[0] === originName) return true;
   }
 
-  req.csrfDetail = { origin: originHost, host: req.headers.host || '', xfh: req.headers['x-forwarded-host'] || '' };
+  // 已持有会话 Cookie 的请求：Cookie 是 SameSite=Lax + HttpOnly，
+  // 跨站 POST 不会被浏览器带上，因此能带上来就说明来自本站页面。
+  // 这一条同样不依赖 Host，代理怎么改写都不影响。
+  const cookie = String(req.headers.cookie || '');
+  if (new RegExp(`(?:^|;\\s*)${auth.COOKIE_NAME}=[^;]{8,}`).test(cookie)) return true;
+
+  req.csrfDetail = {
+    origin: originHost,
+    host: req.headers.host || '',
+    xfh: req.headers['x-forwarded-host'] || '',
+    site: site || '-'
+  };
   return false;
 }
 
@@ -319,12 +337,20 @@ async function handleApi(req, res, url) {
   const method = req.method.toUpperCase();
   const force = url.searchParams.get('force') === '1';
 
-  // 非 GET 请求校验来源，避免 CSRF（登录、改密等同样适用）
-  if (method !== 'GET' && method !== 'HEAD' && !sameOrigin(req)) {
+  // 非 GET 请求校验来源，避免 CSRF。
+  // 登录与首次设置例外：前者需要密码、后者在任何人都能直接访问的前提下才可用，
+  // 做了来源校验只会在反向代理场景下把自己挡在门外，不增加实际安全性。
+  const authEntry = p === '/api/auth/login' || p === '/api/auth/setup';
+  if (!authEntry && method !== 'GET' && method !== 'HEAD' && !sameOrigin(req)) {
     const d = req.csrfDetail || {};
-    process.stdout.write(`[csrf] 拒绝 origin=${d.origin || '-'} host=${d.host || '-'} xfh=${d.xfh || '-'}\n`);
+    process.stdout.write(
+      `[csrf] 拒绝 origin=${d.origin || '-'} host=${d.host || '-'} xfh=${d.xfh || '-'} sec-fetch-site=${d.site || '-'}\n`
+    );
     return sendJson(res, 403, {
-      error: `跨站请求被拒绝（origin=${d.origin || '-'} / host=${d.host || '-'}）。反向代理请透传原始 Host（Nginx: proxy_set_header Host $host;），或设置环境变量 PUBLIC_URL 为对外访问地址`
+      error:
+        `跨站请求被拒绝（origin=${d.origin || '-'} / host=${d.host || '-'}）。` +
+        '反向代理请透传原始 Host（Nginx: proxy_set_header Host $host;），' +
+        '或设置环境变量 PUBLIC_URL 为对外访问地址'
     });
   }
 
