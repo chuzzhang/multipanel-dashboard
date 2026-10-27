@@ -57,15 +57,56 @@ function isSecureReq(req) {
   return String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
 }
 
-// 简单 CSRF 防护：跨站来源直接拒绝（同站请求没有 Origin 或与 Host 一致）
+// CSRF 防护：非 GET 请求校验来源。
+// 反向代理/隧道常会改写 Host，所以同时参考 X-Forwarded-Host、X-Original-Host，
+// 并允许用 PUBLIC_URL 显式声明对外访问地址；端口被省略时退化为只比主机名。
+function normalizeHost(h) {
+  return String(h || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/:(80|443)$/, '')
+    .replace(/\/$/, '');
+}
+
 function sameOrigin(req) {
   const origin = req.headers.origin;
-  if (!origin) return true;
+  if (!origin) return true; // 同站请求（部分客户端不带 Origin）
+
+  let parsed;
   try {
-    return new URL(origin).host === req.headers.host;
+    parsed = new URL(origin);
   } catch (_) {
     return false;
   }
+
+  const hosts = new Set();
+  [req.headers.host, req.headers['x-forwarded-host'], req.headers['x-original-host']]
+    .filter(Boolean)
+    .join(',')
+    .split(',')
+    .map(normalizeHost)
+    .filter(Boolean)
+    .forEach((h) => hosts.add(h));
+
+  if (process.env.PUBLIC_URL) {
+    const pub = normalizeHost(process.env.PUBLIC_URL);
+    if (pub) hosts.add(pub);
+  }
+
+  if (!hosts.size) return true;
+
+  const originHost = normalizeHost(parsed.host);
+  if (hosts.has(originHost)) return true;
+
+  // 代理可能把端口改写或去掉，退一步只比主机名
+  const originName = originHost.split(':')[0];
+  for (const h of hosts) {
+    if (h.split(':')[0] === originName) return true;
+  }
+
+  req.csrfDetail = { origin: originHost, host: req.headers.host || '', xfh: req.headers['x-forwarded-host'] || '' };
+  return false;
 }
 
 function readBody(req, limit = 1024 * 1024) {
@@ -280,7 +321,11 @@ async function handleApi(req, res, url) {
 
   // 非 GET 请求校验来源，避免 CSRF（登录、改密等同样适用）
   if (method !== 'GET' && method !== 'HEAD' && !sameOrigin(req)) {
-    return sendJson(res, 403, { error: '跨站请求被拒绝' });
+    const d = req.csrfDetail || {};
+    process.stdout.write(`[csrf] 拒绝 origin=${d.origin || '-'} host=${d.host || '-'} xfh=${d.xfh || '-'}\n`);
+    return sendJson(res, 403, {
+      error: `跨站请求被拒绝（origin=${d.origin || '-'} / host=${d.host || '-'}）。反向代理请透传原始 Host（Nginx: proxy_set_header Host $host;），或设置环境变量 PUBLIC_URL 为对外访问地址`
+    });
   }
 
   if (p.startsWith('/api/auth/')) {

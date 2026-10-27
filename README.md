@@ -40,6 +40,7 @@ node server.js          # 默认 http://127.0.0.1:8787
 | `ADMIN_PASSWORD` | 首次启动时用它初始化管理员密码（已设置过则忽略） | 无 |
 | `ADMIN_USERNAME` | 配合上一个变量指定用户名 | `admin` |
 | `AUTH_DISABLED` | 设为 `1` 完全关闭登录校验（仅限完全可信的本机环境） | 关闭登录 |
+| `PUBLIC_URL` | 面板对外访问地址（如 `https://mp.example.com`）。反向代理改写了 Host 时用它放行 POST 请求 | 无 |
 
 ---
 
@@ -266,6 +267,10 @@ HOST=0.0.0.0 PORT=8787 ADMIN_PASSWORD='your-password' ./start.sh
 
 首次打开会在网页上设置管理员密码（或提前用 `ADMIN_PASSWORD` 预置）。
 默认只监听 `127.0.0.1`，生产环境建议前面挂 **Nginx / Caddy / Cloudflare Tunnel** 反代并启用 HTTPS——走 HTTPS 时登录 Cookie 才会自动带上 `Secure`。
+
+> **反代必须透传 Host**：Nginx 加 `proxy_set_header Host $host;`（或 `$http_host`）。
+> 如果代理改写了 Host 又没带 `X-Forwarded-Host`，登录 / 保存 / 设置密码这类 POST 请求会被 CSRF 校验拦下，
+> 页面提示「跨站请求被拒绝」。此时设置环境变量 `PUBLIC_URL=https://你的域名` 即可放行，不必改代理配置。
 
 ### pm2 常驻（推荐，断线自动重启）
 

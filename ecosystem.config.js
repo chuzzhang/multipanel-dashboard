@@ -16,6 +16,8 @@ module.exports = {
         PORT: 8787,
         // 首次启动预置管理员密码（可选，已设置过会忽略）：
         // ADMIN_PASSWORD: 'change-me-please',
+        // 走反向代理时，如果代理改写了 Host，把它设成对外访问地址：
+        // PUBLIC_URL: 'https://mp.example.com',
         ALLOW_INSECURE_TLS: '1' // 自建面板常有自签证书；要严格校验改成 '0'
       }
     }
