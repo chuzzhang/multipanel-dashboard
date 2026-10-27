@@ -257,11 +257,11 @@ Dockerfile / .dockerignore   容器化部署
 ### 直接跑 Node（推荐给已有 Node 22+ 的机器）
 
 ```bash
-# 上传代码后
+# 把代码传到服务器后（scp / rsync / sftp 均可）
 chmod +x start.sh
 ./start.sh            # 默认 127.0.0.1:8787
 # 需要公网直接访问：
-HOST=0.0.0.0 PORT=8787 ADMIN_PASSWORD='你的密码' ./start.sh
+HOST=0.0.0.0 PORT=8787 ADMIN_PASSWORD='your-password' ./start.sh
 ```
 
 首次打开会在网页上设置管理员密码（或提前用 `ADMIN_PASSWORD` 预置）。
