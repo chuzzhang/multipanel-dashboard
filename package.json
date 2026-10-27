@@ -1,0 +1,14 @@
+{
+  "name": "multipanel-dashboard",
+  "version": "1.1.0",
+  "private": true,
+  "description": "多平台仪表盘聚合：WorkBuddy / DeepSeek / Cloudflare / 宝塔 / 哪吒 / 青龙",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

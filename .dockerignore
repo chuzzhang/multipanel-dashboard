@@ -1,0 +1,16 @@
+data
+.git
+.gitignore
+.workbuddy
+node_modules
+dist
+*.tar.gz
+*.zip
+*.log
+.DS_Store
+.shots
+.tmp
+start.bat
+Dockerfile
+README.md
+ecosystem.config.js

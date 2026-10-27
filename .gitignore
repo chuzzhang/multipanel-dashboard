@@ -1,0 +1,10 @@
+node_modules/
+data/
+.workbuddy/
+dist/
+.shots/
+.tmp/
+*.log
+*.tar.gz
+*.zip
+.DS_Store

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<title>MultiPanel · 多平台仪表盘</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%233b6ef6'/%3E%3Cpath d='M18 44V22l14 12 14-12v22' stroke='white' stroke-width='5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="aurora" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 24V9l9 8 9-8v15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>MultiPanel</h1>
+        <p>WorkBuddy · DeepSeek · Cloudflare · 宝塔 · 哪吒 · 青龙</p>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="segmented" id="autoGroup" role="group" aria-label="自动刷新间隔">
+        <button type="button" data-auto="0">手动</button>
+        <button type="button" data-auto="30">30s</button>
+        <button type="button" data-auto="60">1m</button>
+        <button type="button" data-auto="300">5m</button>
+      </div>
+      <button class="icon-btn" id="accountBtn" type="button" title="账户与登录">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4.8 20c.9-3.6 3.7-5.6 7.2-5.6s6.3 2 7.2 5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <button class="icon-btn" id="themeBtn" type="button" title="切换深浅色">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="btn ghost" id="refreshBtn" type="button" title="刷新全部">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="btn-label">刷新</span>
+      </button>
+      <button class="btn primary" id="addBtn" type="button" title="添加连接">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>
+        <span class="btn-label">添加连接</span>
+      </button>
+    </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="summary" id="summary" hidden></section>
+    <section class="grid" id="grid" aria-live="polite"></section>
+  </main>
+
+  <footer class="foot">
+    <span>密钥保存在服务端 <code>data/connections.json</code>，不会下发到浏览器</span>
+    <span class="dot-sep"></span>
+    <span id="footTime"></span>
+    <button class="foot-link" id="footAction" type="button" hidden>清除演示数据</button>
+  </footer>
+
+  <div id="modalRoot"></div>
+  <div id="authRoot"></div>
+  <div class="toasts" id="toasts"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
