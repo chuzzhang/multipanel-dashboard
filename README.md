@@ -33,7 +33,7 @@ Windows 上也可以直接双击 `start.bat`（会先打开浏览器再启动服
 
 ---
 
-## 1.5 管理员登录
+## 2. 管理员登录
 
 面板默认带登录保护，第一次打开会要求设置管理员密码（至少 8 位），之后用同一个密码登录。
 
@@ -48,7 +48,7 @@ Windows 上也可以直接双击 `start.bat`（会先打开浏览器再启动服
 
 ---
 
-## 2. 各平台怎么填
+## 3. 各平台怎么填
 
 ### WorkBuddy
 WorkBuddy 官方没有公开的积分接口，所以支持三种取数方式，默认走 **自建网关**：
@@ -96,7 +96,7 @@ WorkBuddy 官方没有公开的积分接口，所以支持三种取数方式，�
 | 404 | 明确提示余额接口是 `/user/balance`，OpenAI 兼容中转站通常没有余额接口 |
 | 返回网页 | 提示地址被填成了控制台首页 |
 
-走中转站时把「API 地址」改成中转站地址；如果那家中转站没有余额接口，只能显示报错，无法伪造数据。
+走中转站时把「API 地址」改成中转站地址；多数 OpenAI 兼容中转站没有余额查询接口，此时无法读取余额。
 
 ### Cloudflare
 在 [API Tokens](https://dash.cloudflare.com/profile/api-tokens) 创建 Token，权限给：
@@ -170,7 +170,7 @@ request_token = md5(request_time + md5(api_key))
 
 ---
 
-## 3. 安全说明
+## 4. 安全说明
 
 - 默认只监听 `127.0.0.1`，配合管理员登录已经是「本机工具」级别的保护。
 - 想让手机也看，不要把 `HOST` 直接改成 `0.0.0.0` 裸奔，建议：Cloudflare Tunnel / Nginx + HTTPS，这样 Cookie 才会带上 `Secure` 标记。
@@ -181,7 +181,7 @@ request_token = md5(request_time + md5(api_key))
 
 ---
 
-## 4. 文件结构
+## 5. 文件结构
 
 ```
 server.js            HTTP 服务 + 路由 + 鉴权守卫 + 掩码 + 15s 缓存
@@ -191,14 +191,14 @@ lib/store.js         connections.json / workbuddy-history.json 读写
 public/index.html    页面骨架
 public/styles.css    设计令牌 + 组件样式（浅色/深色）
 public/app.js        渲染、刷新、表单、弹窗、卡片超链接
-data/                你的连接配置（自动生成，勿提交）
+data/                连接与登录配置（运行时生成，勿提交）
 start.sh             Linux/macOS 启动脚本
 start.bat            Windows 启动脚本（双击运行）
 ecosystem.config.js  pm2 进程管理配置
 Dockerfile / .dockerignore   容器化部署
 ```
 
-## 5. HTTP 接口
+## 6. HTTP 接口
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -217,9 +217,9 @@ Dockerfile / .dockerignore   容器化部署
 | POST | `/api/probe` | 保存前测试连接 `{type,config}` |
 | POST/DELETE | `/api/demo` | 载入 / 清除演示数据 |
 
-> 每个连接都有独立的「使用演示数据」开关（编辑弹窗底部）。勾选时不请求真实接口，卡片显示示例数据并带 `DEMO` 标记；填入真实凭据后记得取消勾选。
+> 每个连接都有独立的「使用演示数据」开关（编辑弹窗底部）。勾选时卡片显示示例数据并带 `DEMO` 标记；填入真实凭据后取消勾选，即读取真实数据。
 
-## 6. 常见问题
+## 7. 常见问题
 
 | 现象 | 原因 |
 | --- | --- |
@@ -242,7 +242,7 @@ Dockerfile / .dockerignore   容器化部署
 | 登录后又跳回登录页 | Cookie 被浏览器/插件拦了，或反向代理改了域名导致 Set-Cookie 失效 |
 
 
-## 7. 部署到服务器
+## 8. 部署到服务器
 
 ### 直接跑 Node（推荐给已有 Node 22+ 的机器）
 
@@ -270,34 +270,26 @@ pm2 logs multipanel
 
 ```bash
 docker build -t multipanel .
-docker run -d --name multipanel   -p 8787:8787   -v multipanel-data:/app/data   -e ADMIN_PASSWORD='你的密码'   multipanel
+docker run -d --name multipanel \
+  -p 8787:8787 \
+  -v multipanel-data:/app/data \
+  -e ADMIN_PASSWORD='your-password' \
+  multipanel
 ```
 
 `data/` 挂成卷后，连接配置和密码会持久化，重启不丢。
 
-### 迁移现有配置（可选）
+### 迁移既有配置（可选）
 
-把本机 `data/connections.json` 拷到服务器同名位置即可带上所有连接；`data/auth.json` / `data/sessions.json` 不要拷（会连同密码/会话一起搬过去，要么一起拷要么都重新设置）。
+把旧实例的 `data/connections.json` 复制到新实例的同名位置，即可迁移全部连接；`data/auth.json` 与 `data/sessions.json` 不要复制——里面是密码和登录会话，建议在新实例上重新设置。
 
-## 8. 上传 GitHub
-
-项目已配好 `.gitignore`（排除 `data/` 里的密钥、`.workbuddy/`、`dist/`），不会把连接密码带上 GitHub。
+### 打包源码（不含密钥）
 
 ```bash
-git init
-git add .
-git commit -m "MultiPanel 多平台仪表盘 v1.1.0"
-git branch -M main
-git remote add origin https://github.com/<你的用户名>/<仓库名>.git
-git push -u origin main
+tar -czf multipanel-1.1.0.tar.gz \
+  --exclude='data' --exclude='.git' --exclude='.workbuddy' \
+  --exclude='node_modules' --exclude='dist' --exclude='*.tar.gz' .
 ```
 
-> 先到 github.com 新建一个空仓库（不要勾选 README/.gitignore），拿到仓库地址替换上面第三行的 remote。
+Windows 下可用 7-Zip 或系统自带压缩工具打包。
 
-### 打包成压缩包（不带密钥）
-
-```bash
-tar -czf multipanel-1.1.0.tar.gz   --exclude='data' --exclude='.git' --exclude='.workbuddy'   --exclude='node_modules' --exclude='dist' --exclude='*.tar.gz'   .
-```
-
-也可以把上面命令换成 `zip -r multipanel-1.1.0.zip . -x ...`。
