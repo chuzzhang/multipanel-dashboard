@@ -31,6 +31,7 @@ const state = {
   formType: null,
   formValues: {},
   formDemo: false,
+  importRows: null,
   testResult: null,
   autoSec: Number(localStorage.getItem('mp.auto') || 0),
   timer: null,
@@ -1482,7 +1483,7 @@ async function logout() {
 function openAccount() {
   const root = $('#modalRoot');
   const name = state.auth.username || 'admin';
-  root.innerHTML = `<div class="overlay" data-close="1"><div class="dialog" style="width:min(440px,100%)" role="dialog" aria-modal="true">
+  root.innerHTML = `<div class="overlay" data-close="1"><div class="dialog" style="width:min(520px,100%)" role="dialog" aria-modal="true">
     <div class="dialog-head">
       <div><h3>账户</h3><p>管理员登录与密码管理</p></div>
       <button class="icon-btn dialog-close" type="button" data-action="close" aria-label="关闭">✕</button>
@@ -1499,6 +1500,17 @@ function openAccount() {
         <div class="field half"><label>确认新密码</label><input class="input" id="pwNew2" type="password" autocomplete="new-password" /></div>
       </div>
       <div class="auth-error" id="pwError" hidden style="margin-top:12px"></div>
+
+      <div class="acc-section-title">配置迁移</div>
+      <div class="mig-grid">
+        <button class="btn ghost" type="button" data-action="export" data-secrets="1">导出（含密钥）</button>
+        <button class="btn ghost" type="button" data-action="export" data-secrets="0">导出（不含密钥）</button>
+        <button class="btn ghost" type="button" data-action="pickImport">导入配置…</button>
+      </div>
+      <p class="mig-hint">导出的 JSON 可在另一台机器上导入，用于迁移或备份。含密钥的文件请勿外传。</p>
+      <input type="file" id="importFile" accept=".json,application/json" hidden />
+      <div class="auth-error" id="impError" hidden style="margin-top:10px"></div>
+      <div id="impPreview" hidden style="margin-top:10px"></div>
     </div>
     <div class="dialog-foot">
       <button class="btn ghost" type="button" data-action="logout">退出登录</button>
@@ -1509,6 +1521,119 @@ function openAccount() {
 
   $('[data-action="changePw"]').addEventListener('click', changePassword);
   $('[data-action="logout"]').addEventListener('click', logout);
+
+  $$('[data-action="export"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const withSecrets = btn.getAttribute('data-secrets') === '1';
+      if (!withSecrets && !confirm('导出不含密钥的配置？导入到新机器后需要重新填写各平台的 API Key。')) return;
+      const a = document.createElement('a');
+      a.href = `/api/export?secrets=${withSecrets ? 1 : 0}`;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast(withSecrets ? '已导出（含密钥），请妥善保管' : '已导出（不含密钥）', 'ok');
+    });
+  });
+
+  const picker = $('#importFile');
+  $('[data-action="pickImport"]').addEventListener('click', () => picker.click());
+  picker.addEventListener('change', () => {
+    const file = picker.files && picker.files[0];
+    picker.value = '';
+    if (file) prepareImport(file);
+  });
+}
+
+async function prepareImport(file) {
+  const err = $('#impError');
+  const box = $('#impPreview');
+  err.hidden = true;
+  box.hidden = true;
+
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch (_) {
+    err.textContent = '不是有效的 JSON 文件';
+    err.hidden = false;
+    return;
+  }
+
+  const rows = Array.isArray(data) ? data : data && Array.isArray(data.connections) ? data.connections : null;
+  if (!rows) {
+    err.textContent = '文件里没有 connections 数组，可能不是本面板导出的配置';
+    err.hidden = false;
+    return;
+  }
+  if (!rows.length) {
+    err.textContent = '文件里没有任何连接';
+    err.hidden = false;
+    return;
+  }
+
+  const secretCount = rows.filter((c) =>
+    (((state.types[c && c.type] || {}).fields) || []).some((f) => f.secret && c.config && c.config[f.key])
+  ).length;
+  const withSecrets = secretCount > 0;
+  const exportedAt = data && data.exportedAt ? timeAgo(Date.parse(data.exportedAt)) : '';
+
+  state.importRows = rows;
+  box.innerHTML = `<div class="imp-box">
+    <div class="imp-title"><b>${rows.length}</b> 个连接 · ${withSecrets ? `含密钥（${secretCount} 个）` : '不含密钥'}</div>
+    <div class="imp-sub">${esc(file.name)}${exportedAt ? ` · 导出于 ${esc(exportedAt)}` : ''}</div>
+    <div class="mig-grid" style="margin-top:10px">
+      <button class="btn ghost" type="button" data-import="merge">合并导入</button>
+      <button class="btn ghost" type="button" data-import="replace">覆盖导入</button>
+    </div>
+  </div>`;
+  box.hidden = false;
+  box.querySelectorAll('[data-import]').forEach((b) => {
+    b.addEventListener('click', () => doImport(b.getAttribute('data-import')));
+  });
+}
+
+async function doImport(mode) {
+  const rows = state.importRows || [];
+  if (!rows.length) return;
+  if (
+    mode === 'replace' &&
+    !confirm(`覆盖导入会先清空现有的 ${state.connections.length} 个连接，只保留文件里的 ${rows.length} 个。确定继续？`)
+  ) {
+    return;
+  }
+
+  try {
+    const res = await api('/api/import', { method: 'POST', body: { mode, connections: rows } });
+    closeModal();
+    const parts = [];
+    if (res.imported) parts.push(`新增 ${res.imported} 个`);
+    if (res.updated) parts.push(`更新 ${res.updated} 个`);
+    if (res.skipped && res.skipped.length) parts.push(`跳过 ${res.skipped.length} 个未知类型`);
+    toast(`导入完成：${parts.join('，') || '无变化'}`, 'ok');
+
+    if (res.missingSecrets && res.missingSecrets.length) {
+      setTimeout(
+        () => toast(`这些连接缺少密钥，需要补填：${res.missingSecrets.slice(0, 3).join('、')}${res.missingSecrets.length > 3 ? ' 等' : ''}`, 'err'),
+        400
+      );
+    }
+
+    state.importRows = null;
+    state.metrics.clear();
+    await loadState(true);
+    renderGrid();
+    renderSummary();
+    refreshAll();
+  } catch (err) {
+    const box = $('#impError');
+    if (box) {
+      box.textContent = err.message || '导入失败';
+      box.hidden = false;
+    } else {
+      toast(`导入失败：${err.message}`, 'err');
+    }
+  }
 }
 
 async function changePassword() {

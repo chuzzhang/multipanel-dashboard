@@ -1,6 +1,6 @@
 {
   "name": "multipanel-dashboard",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "private": true,
   "description": "多平台仪表盘聚合：WorkBuddy / DeepSeek / Cloudflare / 宝塔 / 哪吒 / 青龙",
   "main": "server.js",

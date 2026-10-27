@@ -227,6 +227,8 @@ Dockerfile / .dockerignore   容器化部署
 | GET | `/api/metrics/:id?force=1` | 拉取单个 |
 | POST | `/api/probe` | 保存前测试连接 `{type,config}` |
 | POST/DELETE | `/api/demo` | 载入 / 清除演示数据 |
+| GET | `/api/export?secrets=1\|0` | 导出全部连接（`secrets=0` 时密钥置空），带 `Content-Disposition` 直接下载 |
+| POST | `/api/import` | 导入 `{mode:"merge"\|"replace", connections:[…]}`，返回 `imported/updated/skipped/missingSecrets` |
 
 > 每个连接都有独立的「使用演示数据」开关（编辑弹窗底部）。勾选时卡片显示示例数据并带 `DEMO` 标记；填入真实凭据后取消勾选，即读取真实数据。
 
@@ -303,12 +305,20 @@ docker run -d --name multipanel \
 
 ### 迁移既有配置（可选）
 
-把旧实例的 `data/connections.json` 复制到新实例的同名位置，即可迁移全部连接；`data/auth.json` 与 `data/sessions.json` 不要复制——里面是密码和登录会话，建议在新实例上重新设置。
+**推荐用界面里的一键迁移**：点顶栏人像图标 → 账户弹窗 → 「配置迁移」
+
+- **导出（含密钥）**：下载一个 JSON，包含全部连接及 API Key，可直接导入到另一台机器；
+- **导出（不含密钥）**：只导地址、名称、字段结构，导入后需要重新填各平台的 Key，适合分享配置或备份到不受控的位置；
+- **导入配置…**：选择 JSON 后先预览（显示连接数、是否含密钥、导出时间），再选
+  - **合并导入**：同类型 + 同名视为同一条，覆盖其配置；密钥为空的字段保留原值，不会把你已填的 Key 清掉；
+  - **覆盖导入**：先清空现有连接，完全以文件为准（会二次确认）。
+
+也可以直接复制数据文件：把旧实例的 `data/connections.json` 放到新实例同名位置即可；`data/auth.json` 与 `data/sessions.json` 不要复制——里面是密码和登录会话，建议在新实例上重新设置。
 
 ### 打包源码（不含密钥）
 
 ```bash
-tar -czf multipanel-1.1.2.tar.gz \
+tar -czf multipanel-1.1.3.tar.gz \
   --exclude='data' --exclude='.git' --exclude='.workbuddy' \
   --exclude='node_modules' --exclude='dist' --exclude='*.tar.gz' .
 ```

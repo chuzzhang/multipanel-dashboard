@@ -453,6 +453,112 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, data);
   }
 
+  if (p === '/api/export' && method === 'GET') {
+    const withSecrets = url.searchParams.get('secrets') !== '0';
+    const payload = {
+      app: 'multipanel',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      secretsIncluded: withSecrets,
+      connections: store.list().map((c) => {
+        const meta = TYPES[c.type] || { fields: [] };
+        const config = { ...(c.config || {}) };
+        if (!withSecrets) {
+          for (const f of meta.fields || []) {
+            if (!f.secret) continue;
+            if (config[f.key] !== undefined) config[f.key] = '';
+          }
+        }
+        return { type: c.type, name: c.name, demo: !!c.demo, config };
+      })
+    };
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+    const data = JSON.stringify(payload, null, 2);
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="multipanel-${stamp}.json"`,
+      'Content-Length': Buffer.byteLength(data),
+      'Cache-Control': 'no-store'
+    });
+    return res.end(data);
+  }
+
+  if (p === '/api/import' && method === 'POST') {
+    const body = await readBody(req);
+    const mode = body.mode === 'replace' ? 'replace' : 'merge';
+    const rows = Array.isArray(body.connections) ? body.connections : null;
+    if (!rows) return sendJson(res, 400, { error: '导入内容格式不对：缺少 connections 数组' });
+    if (rows.length > 200) return sendJson(res, 400, { error: '一次最多导入 200 个连接' });
+
+    const cleaned = [];
+    const skipped = [];
+    for (const raw of rows) {
+      const type = String((raw && raw.type) || '');
+      if (!TYPES[type]) {
+        skipped.push(type || '(缺少 type)');
+        continue;
+      }
+      const name = String((raw && raw.name) || TYPES[type].label).slice(0, 40);
+      const cfg = raw && typeof raw.config === 'object' && raw.config ? { ...raw.config } : {};
+      cleaned.push({ type, name, config: cfg, demo: !!(raw && raw.demo) });
+    }
+    if (!cleaned.length) {
+      return sendJson(res, 400, {
+        error: `没有可导入的连接${skipped.length ? '（不认识的类型：' + skipped.join('、') + '）' : ''}`
+      });
+    }
+
+    let imported = 0;
+    let updated = 0;
+
+    if (mode === 'replace') {
+      store.replaceAll(cleaned);
+      imported = cleaned.length;
+      CACHE.clear();
+    } else {
+      for (const item of cleaned) {
+        const hit = store.list().find((c) => c.type === item.type && c.name === item.name);
+        if (hit) {
+          const prev = hit.config || {};
+          const cfg = { ...prev, ...item.config };
+          for (const f of TYPES[item.type].fields || []) {
+            if (!f.secret) continue;
+            const v = item.config[f.key];
+            if (v === undefined || v === null || v === '' || (typeof v === 'string' && v.startsWith('••••'))) {
+              if (prev[f.key] !== undefined) cfg[f.key] = prev[f.key];
+              else delete cfg[f.key];
+            }
+          }
+          store.update(hit.id, { config: cfg, demo: item.demo });
+          CACHE.delete(hit.id);
+          updated += 1;
+        } else {
+          const row = store.add(item);
+          CACHE.delete(row.id);
+          imported += 1;
+        }
+      }
+    }
+
+    // 覆盖导入时若文件不含密钥，提醒哪些连接缺少凭据
+    const missingSecrets =
+      mode === 'replace'
+        ? cleaned
+            .filter((c) => (TYPES[c.type].fields || []).some((f) => f.secret && !c.config[f.key]))
+            .map((c) => c.name)
+        : [];
+
+    return sendJson(res, 200, {
+      ok: true,
+      mode,
+      imported,
+      updated,
+      skipped,
+      missingSecrets,
+      connections: store.list().map(publicConn)
+    });
+  }
+
   if (p === '/api/demo' && method === 'POST') {
     store.removeDemo();
     const presets = [
