@@ -4,6 +4,12 @@
 
 零第三方依赖（只用 Node 内置模块），`node server.js` 就能跑，密钥只保存在本机服务端，不下发到浏览器。
 
+## 预览
+
+![MultiPanel 仪表盘（浅色）](screenshot.png)
+
+深色模式：[screenshot-dark.png](screenshot-dark.png)
+
 ---
 
 ## 1. 启动
