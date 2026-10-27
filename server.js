@@ -583,6 +583,21 @@ async function handleApi(req, res, url) {
   return sendJson(res, 404, { error: 'Not Found' });
 }
 
+// 静态资源带指纹：Cloudflare / 浏览器会用自己的一套 TTL 缓存 js、css，
+// 改了文件也可能拿到旧版本。用文件 mtime 生成 ?v= 参数，文件一变 URL 就变。
+function assetVersion() {
+  const files = ['app.js', 'styles.css'].map((f) => path.join(PUBLIC_DIR, f));
+  let stamp = 0;
+  for (const f of files) {
+    try {
+      stamp = Math.max(stamp, fs.statSync(f).mtimeMs);
+    } catch (_) {
+      /* 缺文件就忽略 */
+    }
+  }
+  return Math.floor(stamp).toString(36);
+}
+
 function serveStatic(req, res, pathname) {
   let rel = decodeURIComponent(pathname);
   if (rel === '/' || rel === '') rel = '/index.html';
@@ -597,12 +612,34 @@ function serveStatic(req, res, pathname) {
       return;
     }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, {
-      'Content-Type': MIME[ext] || 'application/octet-stream',
+    const baseHeaders = {
       'Cache-Control': 'no-cache',
-      'Content-Length': stat.size,
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer'
+    };
+
+    // HTML 里注入资源指纹，保证每次改版都能拿到新的 js / css
+    if (ext === '.html') {
+      fs.readFile(filePath, 'utf8', (readErr, html) => {
+        if (readErr) {
+          res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Read Error');
+          return;
+        }
+        const body = html.replace(/\{\{ASSET_VER\}\}/g, assetVersion());
+        res.writeHead(200, {
+          ...baseHeaders,
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Length': Buffer.byteLength(body)
+        });
+        res.end(req.method === 'HEAD' ? undefined : body);
+      });
+      return;
+    }
+
+    res.writeHead(200, {
+      ...baseHeaders,
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Content-Length': stat.size
     });
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(filePath).pipe(res);

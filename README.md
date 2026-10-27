@@ -318,7 +318,7 @@ docker run -d --name multipanel \
 ### 打包源码（不含密钥）
 
 ```bash
-tar -czf multipanel-1.1.3.tar.gz \
+tar -czf multipanel-1.1.4.tar.gz \
   --exclude='data' --exclude='.git' --exclude='.workbuddy' \
   --exclude='node_modules' --exclude='dist' --exclude='*.tar.gz' .
 ```
